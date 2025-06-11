@@ -1,73 +1,61 @@
-import json
+import logging
+from aiogram import Bot, Dispatcher, types, executor
+from aiogram.types import ParseMode
+from datetime import datetime, timedelta
 import asyncio
-from aiogram import Bot, Dispatcher, executor, types
-from datetime import datetime
+import os
 
-API_TOKEN = '7866677408:AAGk7mEN9vTsYLqhQjl1Q1ya-z6K5_tsBMY'
+API_TOKEN = '7533535042:AAFOL25oLPK8UZ1XFNtnXcY-ihvL_yOJhZY'
+
+logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-LEMBRETES_FILE = 'lembretes.json'
-
-# Carregar lembretes
-def carregar_lembretes():
-    try:
-        with open(LEMBRETES_FILE, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-# Salvar lembretes
-def salvar_lembretes(lembretes):
-    with open(LEMBRETES_FILE, 'w') as f:
-        json.dump(lembretes, f)
-
-# Checagem de lembretes
-async def checar_lembretes():
-    while True:
-        lembretes = carregar_lembretes()
-        agora = datetime.now().strftime('%Y-%m-%d %H:%M')
-        for user_id, user_lembretes in list(lembretes.items()):
-            for lembrete in user_lembretes[:]:
-                if lembrete['hora'] == agora:
-                    try:
-                        await bot.send_message(user_id, f"⏰ Lembrete: {lembrete['texto']}")
-                    except:
-                        pass
-                    user_lembretes.remove(lembrete)
-            lembretes[user_id] = user_lembretes
-        salvar_lembretes(lembretes)
-        await asyncio.sleep(60)
+lembretes = []
 
 @dp.message_handler(commands=['start'])
 async def start(msg: types.Message):
-    await msg.answer("✅ Envie a mensagem no formato:
+    await msg.answer("""✅ Envie a mensagem no formato:
 `AAAA-MM-DD HH:MM texto do lembrete`
+
 Exemplo:
-`2025-06-08 14:30 Tomar remédio`", parse_mode="Markdown")
+`2025-06-08 14:30 Tomar remédio`""", parse_mode="Markdown")
 
 @dp.message_handler()
 async def receber_lembrete(msg: types.Message):
     try:
-        partes = msg.text.split(' ', 2)
-        data_hora = partes[0] + ' ' + partes[1]
-        datetime.strptime(data_hora, '%Y-%m-%d %H:%M')
+        partes = msg.text.split(" ", 2)
+        if len(partes) < 3:
+            raise ValueError("Formato inválido")
+
+        data_hora_str = partes[0] + " " + partes[1]
         texto = partes[2]
 
-        lembretes = carregar_lembretes()
-        user_id = str(msg.from_user.id)
-        if user_id not in lembretes:
-            lembretes[user_id] = []
-        lembretes[user_id].append({"hora": data_hora, "texto": texto})
-        salvar_lembretes(lembretes)
+        horario = datetime.strptime(data_hora_str, "%Y-%m-%d %H:%M")
 
+        lembretes.append((msg.chat.id, horario, texto))
         await msg.reply("✅ Lembrete salvo com sucesso!")
-    except:
-        await msg.reply("❌ Formato inválido. Use:
-`2025-06-08 14:30 Texto do lembrete`", parse_mode="Markdown")
+
+    except Exception:
+        await msg.reply("""❌ Formato inválido. Use:
+`AAAA-MM-DD HH:MM texto do lembrete`""", parse_mode="Markdown")
+
+async def verificador():
+    while True:
+        agora = datetime.now()
+        for lembrete in lembretes[:]:
+            chat_id, horario, texto = lembrete
+            if agora >= horario:
+                try:
+                    await bot.send_message(chat_id, f"⏰ Lembrete:\n{texto}")
+                except Exception as e:
+                    print(f"Erro ao enviar mensagem: {e}")
+                lembretes.remove(lembrete)
+        await asyncio.sleep(30)
+
+async def on_startup(dp):
+    asyncio.create_task(verificador())
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.create_task(checar_lembretes())
-    executor.start_polling(dp, skip_updates=True)
+    executor.start_polling(dp, on_startup=on_startup)
