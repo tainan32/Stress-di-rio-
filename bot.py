@@ -38,9 +38,7 @@ async def receber_lembrete(msg: types.Message):
         await msg.reply("✅ Lembrete salvo com sucesso!")
 
     except Exception:
-        await msg.reply("""❌ Formato inválido. Use:
-`AAAA-MM-DD HH:MM texto do lembrete`""", parse_mode="Markdown")
-
+        await msg.reply("❌  Formato inválido. Use:\n`AAAA-MM-DD HH:MM lembrete`", parse_mode="Markdown")
 async def verificador():
     while True:
         agora = datetime.now()
